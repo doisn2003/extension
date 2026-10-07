@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "HotMatch Claimer",
+  "version": "0.1.2",
+  "description": "Nhận gift code sự kiện Trận đấu nổi bật trên nhiều nhà cái cùng lúc, đúng thời điểm.",
+  "permissions": [
+    "cookies",
+    "storage",
+    "unlimitedStorage",
+    "alarms",
+    "tabs",
+    "scripting",
+    "notifications"
+  ],
+  "optional_host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background/sw.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Mở HotMatch Claimer"
+  },
+  "options_ui": {
+    "page": "dashboard/dashboard.html",
+    "open_in_tab": true
+  },
+  "minimum_chrome_version": "116"
+}

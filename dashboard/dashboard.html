@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>HotMatch Claimer</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">HM</span>
+      <div>
+        <h1>HotMatch Claimer</h1>
+        <p class="brand-sub">collected the money with tool</p>
+      </div>
+    </div>
+
+    <div class="clocks">
+      <div class="clock">
+        <span class="clock-label">Server Time (Calibrated)</span>
+        <span class="clock-value" id="server-clock">--:--:--</span>
+      </div>
+      <div class="clock">
+        <span class="clock-label">API Date</span>
+        <span class="clock-value small" id="vn-date">----------</span>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <span class="chip" id="perm-chip" hidden></span>
+      <button class="btn btn-primary" id="btn-grant" hidden>Grant Cookie Permission</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab is-active" data-panel="panel-sites">Sites</button>
+    <button class="tab" data-panel="panel-bet">Bet Conditions</button>
+    <button class="tab" data-panel="panel-predict">Predictions</button>
+    <button class="tab" data-panel="panel-matches">Matches</button>
+    <button class="tab" data-panel="panel-run">Request API</button>
+    <button class="tab" data-panel="panel-knowledge">Black Box</button>
+  </nav>
+
+  <main>
+    <!-- ------------------------------------------------------------ SITE -->
+    <section class="panel is-active" id="panel-sites">
+      <div class="panel-head">
+        <div>
+          <h2>Sites</h2>
+          <p class="hint" id="sites-summary">Loading…</p>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="btn-discover" title="Dò domain từ tab đang mở và cookie cục bộ, không gửi request">Discover</button>
+          <button class="btn" id="btn-refresh" title="Cập nhật domain, sau đó đọc tài khoản, UID và số dư">Refresh</button>
+          <button class="btn btn-warn" id="btn-probe">Probe</button>
+        </div>
+      </div>
+
+      <div class="notice" id="clock-consensus" hidden></div>
+      <div class="notice" id="sites-notice" hidden></div>
+
+      <div class="table-wrap">
+        <table class="grid" id="sites-table">
+          <thead>
+            <tr>
+              <th class="num col-stt" id="th-stt" style="cursor: pointer;" title="Bấm để chọn / bỏ chọn tất cả">STT</th>
+              <th class="col-check"></th>
+              <th>Site Name</th>
+              <th>Domain</th>
+              <th>Session</th>
+              <th class="num">UID</th>
+              <th>Account</th>
+              <th class="num">Balance</th>
+              <th class="num">Time Offset</th>
+              <th>Endpoint</th>
+              <th class="col-action"><button class="btn btn-mini" id="btn-login-all" title="Đăng nhập tất cả các site đang tick và đã lưu mật khẩu">Login All</button></th>
+              <th class="col-action"><button class="btn btn-mini" id="btn-open-all" title="Mở tất cả các trang nhà cái đang bật trong tab mới">Open All</button></th>
+              <th class="col-action"><button class="btn btn-mini" id="btn-sync-clock" title="Đồng bộ đồng hồ tất cả các site đang bật">Sync</button></th>
+            </tr>
+          </thead>
+          <tbody id="sites-body"></tbody>
+          <tfoot id="sites-foot"></tfoot>
+        </table>
+      </div>
+
+      <div class="add-row">
+        <input type="text" id="manual-domain" placeholder="Thêm domain thủ công, ví dụ tip88.fyi">
+        <button class="btn" id="btn-add-manual">Add</button>
+      </div>
+
+    </section>
+
+    <!-- -------------------------------------------------- ĐIỀU KIỆN CƯỢC -->
+    <section class="panel" id="panel-bet">
+      <div class="panel-head">
+        <div>
+          <h2>Bet Conditions</h2>
+          <p class="hint" id="bet-summary">Đang tải…</p>
+        </div>
+        <div class="btn-row">
+          <select id="bet-game-pick" title="Game kèm sảnh. Cùng một mã game có thể là hai trò khác nhau ở hai sảnh, nên phải chọn cả cặp."></select>
+          <button class="btn" id="btn-bet-discover" title="Dò domain từ tab đang mở và cookie cục bộ, không gửi request">Discover Sites</button>
+          <button class="btn" id="btn-bet-refresh" title="Cập nhật domain, sau đó đọc tài khoản, UID và số dư">Refresh Accounts</button>
+        </div>
+      </div>
+
+      <div class="notice" id="bet-notice" hidden></div>
+
+      <div class="table-wrap">
+        <table class="grid" id="bet-table">
+          <thead>
+            <tr>
+              <th class="num col-stt" id="bet-th-stt" style="cursor: pointer;" title="Bấm để chọn / bỏ chọn tất cả">STT</th>
+              <th class="col-check" id="bet-th-check" style="cursor: pointer;" title="Bấm để chọn / bỏ chọn tất cả site"></th>
+              <th>Site Name</th>
+              <th>Domain</th>
+              <th>Session</th>
+              <th class="num">UID</th>
+              <th>Account</th>
+              <th class="num">Balance</th>
+              <th class="col-action"><button class="btn btn-mini" id="btn-bet-open-all" title="Mở game của các site đã tick, mỗi site một tab nền — không chuyển sang tab đó">Open All</button></th>
+              <th class="col-action"><button class="btn btn-mini" id="btn-bet-reload-all" title="Nạp lại mọi tab đang mở của tất cả site">Refresh All</button></th>
+            </tr>
+          </thead>
+          <tbody id="bet-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------- DỰ ĐOÁN -->
+    <section class="panel" id="panel-predict">
+      <div class="panel-head">
+        <div>
+          <h2>Score Predictions</h2>
+          <p class="hint" id="pred-summary">Đang tải…</p>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-pred-load" title="1 request tới site đầu bảng. UUID trận là CHUNG cho cả 15 site nên chỉ cần hỏi một nơi — đã đối chiếu vk88/k88/bu88, trùng từng ký tự.">Load Matches</button>
+          <button class="btn" id="btn-pred-turns" title="Hỏi từng site hai thứ không suy ra được từ nơi khác: siteId (đọc từ HTML trang chủ) và số lượt còn lại. Toàn bộ là GET, không tốn lượt.">Check Turns</button>
+          <button class="btn" id="btn-pred-discover" title="Dò domain từ tab đang mở và cookie cục bộ, không gửi request">Discover Sites</button>
+          <button class="btn" id="btn-pred-refresh" title="Cập nhật domain, sau đó đọc tài khoản, UID và số dư">Refresh Accounts</button>
+        </div>
+      </div>
+
+      <div class="notice" id="pred-notice" hidden></div>
+
+      <h3>Active Matches</h3>
+      <p class="hint" id="pred-matches-summary">Chưa tải danh sách trận.</p>
+      <div class="table-wrap">
+        <table class="grid" id="pred-matches-table">
+          <thead>
+            <tr>
+              <th class="num col-stt">STT</th>
+              <th>Match</th>
+              <th>Tournament</th>
+              <th>Kickoff (VN)</th>
+              <th>Close (VN)</th>
+              <th class="num">Reward</th>
+              <th>UUID</th>
+            </tr>
+          </thead>
+          <tbody id="pred-matches-body"></tbody>
+        </table>
+      </div>
+
+      <h3>Batch Submit</h3>
+      <div class="card" id="pred-batch-card">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">Match</span>
+            <select id="pred-batch-match" class="label-select"></select>
+          </label>
+          <label class="field field-wide">
+            <span class="field-label">Slips — mỗi kèo là <strong>nhà-khách-số người cùng kèo</strong></span>
+            <input type="text" id="pred-slips" placeholder="0-0-40, 2-0-40, 3-1-40" autocomplete="off">
+          </label>
+        </div>
+
+        <div class="preview" id="pred-slip-preview"></div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-pred-batch" disabled title="Gửi mọi kèo lên mọi site đã tick. Mỗi kèo trên mỗi site trừ 1 lượt.">Batch Submit</button>
+          <span class="clock-value small" id="pred-batch-progress"></span>
+          <label class="check-inline" title="Mặc định tool bỏ qua tỉ số bạn đã đặt trên site đó cho trận này. Server KHÔNG khử trùng lặp — gửi lại là mất thêm 1 lượt mà không được gì.">
+            <input type="checkbox" id="pred-allow-dup">
+            <span>Gửi cả kèo đã đặt trước đó</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="log" id="pred-batch-log"></div>
+
+      <h3>Sites</h3>
+      <p class="hint">Tick site để đưa vào lần gửi hàng loạt — dùng chung danh sách với tab "Site". Mỗi kèo gửi đi trừ đúng <strong>1 lượt của site đó</strong> và không hoàn tác được; sổ lượt tính riêng từng site. Nút "Gửi" ở cuối mỗi dòng dành cho lúc chỉ muốn bắn một kèo lẻ.</p>
+      <div class="table-wrap">
+        <table class="grid" id="pred-table">
+          <thead>
+            <tr>
+              <th class="num col-stt" id="pred-th-stt" style="cursor: pointer;" title="Bấm để chọn / bỏ chọn tất cả site đang đăng nhập">STT</th>
+              <th class="col-check" id="pred-th-check" style="cursor: pointer;" title="Bấm để chọn / bỏ chọn tất cả site đang đăng nhập"></th>
+              <th>Site Name</th>
+              <th>Domain</th>
+              <th>Session</th>
+              <th class="num">UID</th>
+              <th title="Đọc từ HTML trang chủ. Không suy ra được từ domain hay cookie.">siteId</th>
+              <th class="num">Turns Left</th>
+              <th>Match</th>
+              <th>Score &amp; Same Count</th>
+              <th class="col-action">Submit</th>
+            </tr>
+          </thead>
+          <tbody id="pred-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------- TRẬN ĐẤU -->
+    <section class="panel" id="panel-matches">
+      <div class="panel-head">
+        <div>
+          <h2>Matches</h2>
+          <p class="hint">Một trận dùng chung cho cả 15 site. Sai một ký tự trong tên đội là hỏng toàn bộ — dùng nút Thử nghiệm để kiểm trước giờ phát code.</p>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-load-matches" title="1 request tới một site. Lấy thẳng tên trận, giờ bóng lăn và số code còn lại từ server — không phải gõ, không thể sai chính tả.">Load Matches</button>
+          <button class="btn" id="btn-discover-api" title="Chỉ dùng khi nút Tải trận hỏng: thử các đường dẫn ứng viên để tìm lại endpoint.">Discover Endpoints</button>
+        </div>
+      </div>
+
+      <div id="api-discovery"></div>
+
+      <div class="card" id="match-form">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">Home Team</span>
+            <input type="text" id="in-home" list="team-suggestions" placeholder="Independiente Santa Fe" autocomplete="off">
+          </label>
+          <span class="field-joiner">&amp;</span>
+          <label class="field">
+            <span class="field-label">Away Team</span>
+            <input type="text" id="in-away" list="team-suggestions" placeholder="Boyaca Chico" autocomplete="off">
+          </label>
+          <label class="field field-narrow">
+            <span class="field-label">Match Date</span>
+            <input type="date" id="in-date">
+          </label>
+          <label class="field field-narrow">
+            <span class="field-label">Kickoff Time (VN)</span>
+            <input type="time" id="in-time" step="60">
+          </label>
+          <label class="field field-narrow">
+            <span class="field-label">Release Offset (mins)</span>
+            <input type="number" id="in-release-offset" min="0" max="180" step="1" value="10">
+          </label>
+        </div>
+        <datalist id="team-suggestions"></datalist>
+
+        <div class="preview" id="match-preview"></div>
+
+        <div class="check-row">
+          <label class="field field-narrow">
+            <span class="field-label">Site Countdown (rough)</span>
+            <input type="text" id="in-site-countdown" placeholder="00:57:58" autocomplete="off">
+          </label>
+          <button class="btn" id="btn-check-countdown" title="Gõ đại con số đang chạy trên card. Chỉ dùng để suy ra số PHÚT tròn, nên lệch vài chục giây vẫn ra đúng kết quả.">Compare</button>
+          <span class="tiny" id="countdown-check">Chỉ dùng để suy ra số phút tròn — gõ lệch 20–30 giây vẫn ra đúng.</span>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-save-match">Save Match</button>
+          <button class="btn" id="btn-clear-match">Clear Form</button>
+        </div>
+      </div>
+
+      <h3>Match List</h3>
+      <div class="table-wrap">
+        <table class="grid" id="matches-table">
+          <thead>
+            <tr>
+              <th>Match</th>
+              <th>Kickoff (VN)</th>
+              <th>Release Time (VN)</th>
+              <th class="num">Remaining</th>
+              <th>Validation</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="matches-body"></tbody>
+        </table>
+      </div>
+
+      <div id="test-detail"></div>
+    </section>
+
+    <!-- --------------------------------------------------------- BẮN CODE -->
+    <section class="panel" id="panel-run">
+      <div class="panel-head">
+        <div>
+          <h2>Request API</h2>
+          <p class="hint">Chọn trận, bấm ARM rồi để yên trang này. Tool tự bắn đúng thời điểm.</p>
+        </div>
+      </div>
+
+      <div class="card arm-card">
+        <div class="arm-row">
+          <label class="field arm-field-match">
+            <span class="field-label">Target Match</span>
+            <select id="run-match" class="label-select"></select>
+          </label>
+          <label class="field arm-field-mode">
+            <span class="field-label">Mode</span>
+            <select id="sel-shoot-mode" class="label-select">
+              <option value="awm" selected>AWM</option>
+              <option value="scar">SCAR</option>
+            </select>
+          </label>
+          <div class="arm-countdown">
+            <span class="field-label">Remaining</span>
+            <span class="clock-value big" id="run-countdown">--:--:--</span>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btn-arm">ARM</button>
+            <button class="btn" id="btn-rehearse" title="Gửi đúng 1 request mỗi site với TÊN TRẬN THẬT, tại một mốc giả sau 12 giây. Kiểm cùng lúc: độ chính xác thời điểm, tên trận có được server nhận không, và phiên đăng nhập. Chỉ chạy được khi còn cách giờ phát code trên 1 phút.">Check Readiness</button>
+            <button class="btn btn-warn" id="btn-disarm" hidden>Disarm</button>
+          </div>
+        </div>
+        <div class="notice" id="arm-banner" hidden></div>
+
+        <div class="preview" id="run-preview"></div>
+
+        <div class="run-sites-head">
+          <span class="field-label" id="run-sites-label">Target Sites</span>
+          <button class="btn btn-mini" id="btn-refresh-sites" title="Đọc lại cookie của mọi site. Danh sách này tự đồng bộ khi bạn tick/bỏ tick ở tab Site.">Refresh</button>
+        </div>
+        <div id="run-sites"></div>
+      </div>
+
+      <div id="run-results"></div>
+
+      <h3>Log</h3>
+      <div class="log" id="run-log"></div>
+    </section>
+
+    <!-- ---------------------------------------------------------- HỘP ĐEN -->
+    <section class="panel" id="panel-knowledge">
+      <div class="panel-head">
+        <div>
+          <h2>Black Box</h2>
+          <p class="hint">Mọi thứ tool học được nằm ở đây. Chốt nhãn cho phản hồi để lần sau engine xử lý đúng thay vì đoán.</p>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="btn-export">Export Data</button>
+          <button class="btn" id="btn-import">Import Data</button>
+          <button class="btn btn-warn" id="btn-clear-attempts" title="Xoá log từng lần bắn — phần phình nhanh nhất. Giữ nguyên từ điển nhãn, lịch sử trận và ghi chú.">Clear Logs</button>
+          <button class="btn btn-warn" id="btn-clear-all" title="Xoá toàn bộ hộp đen: log, từ điển nhãn, lịch sử trận, ghi chú. Cấu hình site và danh sách trận vẫn giữ.">Clear All</button>
+          <input type="file" id="import-file" accept="application/json" hidden>
+        </div>
+      </div>
+
+      <div class="stat-row" id="bb-counts"></div>
+
+      <h3>Response Dictionary</h3>
+      <p class="hint">Mỗi dòng là một kiểu phản hồi tool đã gặp. Chốt nhãn một lần, dùng mãi.</p>
+      <div class="table-wrap">
+        <table class="grid" id="dict-table">
+          <thead>
+            <tr>
+              <th class="num">Count</th>
+              <th class="num">HTTP</th>
+              <th>Sample Body</th>
+              <th>Site</th>
+              <th>Label</th>
+            </tr>
+          </thead>
+          <tbody id="dict-body"></tbody>
+        </table>
+      </div>
+
+      <h3>Optimization Suggestions</h3>
+      <ul class="suggestions" id="suggestions"></ul>
+    </section>
+  </main>
+
+  <div class="toast-stack" id="toasts"></div>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>
