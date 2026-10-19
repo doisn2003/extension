@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Chrome extension nhận gift code sự kiện Trận đấu nổi bật. Chrome bỏ qua file này; nó chỉ để Node chạy được bộ kiểm tra.",
   "scripts": {
-    "test": "node test/run.js && node --test test/accounts.test.js",
-    "test:accounts": "node --test test/accounts.test.js"
+    "test": "node test/run.js && node --test test/accounts.test.js test/timing.test.js",
+    "test:accounts": "node --test test/accounts.test.js",
+    "test:timing": "node --test test/timing.test.js"
   }
 }

@@ -9,7 +9,7 @@
 
 import * as storage from '../../lib/storage.js';
 import * as sites from '../../lib/sites.js';
-import { consensus, effectiveClock, quality } from '../../lib/clock.js';
+import { consensus, effectiveClock, hasAnchor, serverNow as calibratedNow } from '../../lib/clock.js';
 import { createRun, SITE_STATUS, codeRemainingMs, CODE_TTL_MS } from '../../lib/engine.js';
 import { sortByKickoff, releaseTime } from '../../lib/match.js';
 import { formatDuration, vnDateTimeString, formatOffset } from '../../lib/vn-time.js';
@@ -47,7 +47,7 @@ export function init({ serverNow, onChange } = {}) {
       const shootMode = shootModeSel.value;
       await storage.patch('config', { shootMode });
       await renderPreview();
-      toast(`Chế độ bắn: ${shootMode === 'awm' ? 'AWM (Bắn từng viên / FIFO)' : 'SCAR (Bắn liên thanh)'}`, 'good');
+      toast(`Chế độ bắn: ${shootMode === 'awm' ? 'AWM (Bắn tuần tự)' : 'SCAR (Bắn liên thanh)'}`, 'good');
     });
   }
 
@@ -227,12 +227,6 @@ async function armChecklist(match) {
   const noSession = list.filter((s) => !s.isLogin || !s.account?.uid);
   if (noSession.length) warnings.push(`${noSession.length} site sẽ bị bỏ qua vì chưa đăng nhập: ${noSession.map((s) => s.brand).join(', ')}.`);
 
-  const noClock = usable.filter((s) => !effectiveClock(s, cons));
-  if (noClock.length) warnings.push(`${noClock.length} site chưa đo được giờ (${noClock.map((s) => s.brand).join(', ')}) — sẽ bắn theo đồng hồ máy, nhiều khả năng trượt.`);
-
-  if (cons && cons.uncertaintyMs > 250) warnings.push(`Sai số đồng hồ đồng thuận còn ±${cons.uncertaintyMs}ms — nên đo lại trước khi bắn.`);
-  if (!cons) warnings.push('Chưa đồng bộ đồng hồ. Sang tab Site bấm "Đồng bộ đồng hồ" — máy bạn có thể chậm vài giây so với server.');
-
   // Trận tải từ API mang tên nguyên văn của server nên không thể sai chính tả —
   // cảnh báo kiểm chính tả với loại trận đó là vô nghĩa.
   if (match && match.source !== 'api') {
@@ -244,7 +238,7 @@ async function armChecklist(match) {
   }
 
   if (match && releaseTime(match) < getServerNow() - 60000) {
-    warnings.push('Thời điểm phát code đã qua — engine sẽ bắn ngay lập tức thay vì chờ.');
+    warnings.push('Thời điểm phát code đã qua — AWM sẽ bỏ qua nếu đã hết cửa sổ gửi.');
   }
 
   return { list, usable, cons, blockers, warnings };
@@ -267,8 +261,8 @@ async function renderPreview() {
     el('div', { class: 'preview-row' },
       el('span', { class: 'preview-label', text: 'Chế độ' }),
       el('span', {},
-        el('strong', { text: isAwm ? 'AWM (Bắn từng viên / FIFO Queue — Mặc định)' : 'SCAR (Bắn liên thanh / Dồn dập — Dự phòng)' }),
-        isAwm ? ' — đón đầu hàng đợi server, 1 phát duy nhất (+1 cứu hộ nếu rớt mạng)' : ' — bắn dồn dập nhiều luồng')),
+        el('strong', { text: isAwm ? 'AWM (Bắn tuần tự — Mặc định)' : 'SCAR (Bắn liên thanh / Dồn dập — Dự phòng)' }),
+        isAwm ? ' — chỉ thử tiếp khi server đã từ chối ngoài giờ; tối đa 3 phát' : ' — bắn liên tiếp, chờ phản hồi trước khi gửi tiếp')),
     el('div', { class: 'preview-row' },
       el('span', { class: 'preview-label', text: 'Sẽ bắn' }),
       el('span', { text: `${usable.length} site · tên trận ` }),
@@ -282,23 +276,21 @@ async function renderPreview() {
       el('span', { class: 'preview-label', text: 'Lịch' }),
       el('span', {
         text: isAwm
-          ? `bắn phát #1 tại T - offsetMs - (RTT/2) + ${config.safetyBufferMs || 200}ms · cứu hộ #2 sau ${(config.awmRescueDelayMs || 3800) / 1000}s nếu rớt mạng`
+          ? `bắn sau cận dưới giờ mở + ${config.safetyBufferMs ?? 200}ms · thử tiếp sau phản hồi ngoài giờ, cách ít nhất ${config.awmRetryDelayMs ?? 200}ms`
           : `phát đầu tại T-${config.leadMs}ms · dày mỗi ${config.intervalMs}ms tới T+${config.denseWindowMs / 1000}s ` +
-            `· thưa mỗi ${config.tailIntervalMs / 1000}s tới T+${config.tailWindowMs / 1000}s · tối đa ${config.concurrency} request song song`,
+            `· thưa mỗi ${config.tailIntervalMs / 1000}s tới T+${config.tailWindowMs / 1000}s · tối đa 1 request đang chờ/site`,
       })),
     el('div', { class: 'preview-row' },
       el('span', { class: 'preview-label', text: 'Lượng request' }),
       el('span', {},
-        el('strong', { text: isAwm ? '1 request mỗi site (+1 cứu hộ nếu lỗi mạng)' : `tối đa ${projectedAttempts(config)} request mỗi site` }),
+        el('strong', { text: isAwm ? 'Tối đa 3 request mỗi site, gửi tuần tự' : `tối đa ${projectedAttempts(config)} request mỗi site` }),
         isAwm
-          ? ` — tổng ${usable.length} request (tối đa ${usable.length * 2} nếu rớt mạng). Không bị dính 429.`
+          ? ` — không gửi thêm khi phát trước còn chờ hoặc kết quả chưa rõ.`
           : ` — tổng không quá ${projectedAttempts(config) * usable.length} cho cả lần chạy. Site nào thắng hoặc gặp báo hết code sẽ dừng sớm hơn.`)),
     el('div', { class: 'preview-row' },
       el('span', { class: 'preview-label', text: 'Đồng hồ' }),
       el('span', {
-        text: cons
-          ? `dùng giờ server hiệu chỉnh ${formatOffset(cons.offsetMs)} (±${cons.uncertaintyMs}ms, ${cons.agree}/${cons.total} site đồng thuận)`
-          : 'chưa hiệu chỉnh — đang dùng đồng hồ máy',
+        text: 'Tự đo giờ riêng từng site trước khi bắn; lịch đã hiệu chỉnh không đổi khi Windows Sync.',
       })),
     el('div', { class: 'preview-row' },
       el('span', { class: 'preview-label', text: 'Đổi thưởng' }),
@@ -315,7 +307,8 @@ export function tick() {
   const node = $('#run-countdown');
   if (match) {
     // Đếm tới lúc PHÁT CODE, đúng thứ đồng hồ trên trang nhà cái đang đếm.
-    const remaining = releaseTime(match) - getServerNow();
+    const liveClock = activeRun?.state.entries.find((e) => hasAnchor(e.clock))?.clock;
+    const remaining = releaseTime(match) - (liveClock ? calibratedNow(liveClock) : getServerNow());
     node.textContent = formatDuration(remaining);
     node.className = `clock-value big ${remaining < 0 ? 'dim' : remaining < 60000 ? 'hot' : ''}`;
   } else {
@@ -562,7 +555,8 @@ function renderLiveGrid(entries) {
     const map = {
       [SITE_STATUS.WAITING]: ['', 'chờ'],
       [SITE_STATUS.PREWARM]: ['warn', 'hâm nóng'],
-      [SITE_STATUS.FIRING]: ['warn', e.stateNote ? 'xếp hàng' : 'đang bắn'],
+      [SITE_STATUS.FIRING]: ['warn', 'chờ phản hồi'],
+      [SITE_STATUS.RETRY_WAIT]: ['warn', 'chờ thử lại'],
       [SITE_STATUS.WON]: ['good', 'thắng'],
       [SITE_STATUS.LOST]: ['', 'thua'],
       [SITE_STATUS.BLOCKED]: ['bad', 'chặn'],
@@ -585,7 +579,7 @@ function renderLiveGrid(entries) {
         el('td', { class: 'site-name', text: e.label || e.brand }),
         el('td', {},
           statusChip(e),
-          e.stateNote && e.status === SITE_STATUS.FIRING
+          e.stateNote && [SITE_STATUS.FIRING, SITE_STATUS.RETRY_WAIT, SITE_STATUS.PREWARM, SITE_STATUS.ABORTED].includes(e.status)
             ? el('div', { class: 'tiny dim', style: 'margin-top:2px', text: e.stateNote })
             : null),
         el('td', { class: 'num', text: e.attempts }),
@@ -613,6 +607,7 @@ async function handleArm() {
 
 async function startRun(match, siteList, cons, configOverride = null, meta = {}) {
   const config = configOverride || await storage.get('config');
+  if (activeRun) return toast('Đang có lần chạy; hãy chờ request đang gửi kết thúc.', 'warn');
   const kind = meta.kind || 'claim';
   logLines = [];
 
@@ -621,7 +616,7 @@ async function startRun(match, siteList, cons, configOverride = null, meta = {})
     siteList,
     config,
     kind,
-    offsetFor: (site) => effectiveClock(site, cons)?.offsetMs ?? 0,
+    clockFor: (site) => effectiveClock(site),
     onEvent: handleRunEvent,
   });
 
@@ -631,11 +626,7 @@ async function startRun(match, siteList, cons, configOverride = null, meta = {})
   $('#run-match').disabled = true;
 
   const isAwm = (config.shootMode || 'awm').toLowerCase() === 'awm';
-  const first = isAwm
-    ? Math.round(releaseTime(match) - (cons?.offsetMs ?? 0) + (config.safetyBufferMs || 200) - Date.now())
-    : Math.round(releaseTime(match) - (cons?.offsetMs ?? 0) - config.leadMs - Date.now());
-
-  log(`ARM: ${siteList.length} site · Chế độ ${isAwm ? 'AWM (Bắn từng viên / FIFO)' : 'SCAR (Bắn liên thanh)'} · ${isAwm ? '1 request/site' : `tối đa ${projectedAttempts(config)} req/site`} · bắn sau ${(first / 1000).toFixed(1)}s.`);
+  log(`ARM: ${siteList.length} site · ${isAwm ? 'AWM' : 'SCAR'} · tối đa 1 request đang chờ/site. Đang chuẩn bị đồng hồ riêng từng site.`);
   await renderResults();
 
   try {
@@ -644,13 +635,8 @@ async function startRun(match, siteList, cons, configOverride = null, meta = {})
     const won = Object.values(record.results).filter((r) => r.code);
 
     // Con số đáng xem nhất của một lần diễn tập: bắn lệch mốc bao nhiêu.
-    const planned = releaseTime(match) - (cons?.offsetMs ?? 0) - config.leadMs;
-    const errs = Object.values(record.results)
-      .map((r) => r.firstAttemptAt).filter(Boolean)
-      .map((t) => t - planned).sort((a, b) => a - b);
-    if (errs.length) {
-      log(`Độ chính xác thời điểm: phát đầu lệch ${errs[0]}…${errs.at(-1)}ms so với mốc (âm là sớm). Mục tiêu: trong khoảng ±30ms.`);
-    }
+    const errs = Object.values(record.results).map((r) => r.timing?.[0]?.dispatchErrorMs).filter(Number.isFinite);
+    if (errs.length) log(`Độ trễ gửi so với deadline từng site: ${Math.min(...errs).toFixed(1)}…${Math.max(...errs).toFixed(1)}ms (đồng hồ đơn điệu).`);
 
     if (kind === 'readiness') {
       await reportReadiness(record);
@@ -720,7 +706,7 @@ async function reportReadiness(record) {
   const ok = recognised === total;
   toast(
     ok
-      ? `Sẵn sàng. ${total}/${total} site nhận ra tên trận, thời điểm bắn chuẩn.`
+      ? `${total}/${total} site nhận ra tên trận. Độ trễ gửi được ghi riêng trong nhật ký.`
       : `${recognised}/${total} site nhận ra tên trận — xem nhật ký để biết chi tiết.`,
     ok ? 'good' : 'warn', 12000,
   );
@@ -733,6 +719,9 @@ function handleDisarm() {
 
 function handleRunEvent(event) {
   switch (event.type) {
+    case 'clock-change':
+      log(`Giờ Windows đổi ${formatOffset(event.change.deltaMs)}; giữ nguyên lịch bắn theo đồng hồ đơn điệu.`);
+      break;
     case 'win': {
       const e = event.state.entries.find((x) => x.brand === event.brand);
       log(`✔ ${e.label}: ${e.code} (sau ${e.attempts} lần bắn)`);
@@ -776,6 +765,7 @@ const READINESS_LEAD_MS = 12000;
  * bao giờ rơi vào cửa sổ thật.
  */
 export async function rehearse() {
+  if (activeRun) return toast('Đang có lần chạy; hãy chờ hoàn tất trước khi kiểm tra.', 'warn');
   const match = await currentMatch();
   if (!match) return toast('Chọn một trận trước đã.', 'warn');
 

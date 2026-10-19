@@ -1,0 +1,11 @@
+{
+  "General": {
+    "Request URL": "https://tip88.fyi/api/hotmatch-proxy/v1/hotmatch/giftcode/?date=2026-08-09"
+  },
+  "Request Headers": {
+    "cookie": "user=%7B%22id%22%3A10500449%2C%22username%22%3A%22minh003%22%2C%22balance%22%3A460%2C%22token%22%3A%22synthetic.eyJpYXQiOjE3ODYyMTUwNjAsImRvbWFpbiI6Imh0dHBzOi8vdGlwODguZnlpIn0.synthetic%22%2C%22member_id%22%3A42%7D; is_login=true; recently_10500449_tip88=synthetic"
+  },
+  "Response Headers": {
+    "date": "Sat, 08 Aug 2026 18:51:18 GMT"
+  }
+}

@@ -19,12 +19,15 @@ import * as matchView from './views/match-form.js';
 import * as runView from './views/run.js';
 import * as knowledgeView from './views/knowledge.js';
 
-let clockOffsetMs = 0;
-const serverNow = () => Date.now() + clockOffsetMs;
+import { hasAnchor, serverNow as calibratedNow } from '../lib/clock.js';
+let displayClock = null;
+const serverNow = () => displayClock ? calibratedNow(displayClock) : Date.now();
 
 async function refreshClockOffset() {
-  const cons = await sitesView.currentConsensus();
-  clockOffsetMs = cons?.ok ? cons.offsetMs : 0;
+  const list = await sitesLib.list();
+  displayClock = list.find((s) => s.enabled && hasAnchor(s.clock))?.clock || null;
+  const label = document.querySelector('#server-clock')?.previousElementSibling;
+  if (label) label.textContent = displayClock ? 'Giờ server tham khảo' : 'Giờ máy · chưa đo trong phiên này';
 }
 
 function initTabs() {
@@ -102,6 +105,9 @@ async function onDataChanged() {
 
 async function main() {
   initTabs();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.sites) refreshClockOffset();
+  });
   await initPermission();
 
   // Bản ghi site cũ mang sẵn nguyên bộ cấu hình mặc định, khiến mọi thiết lập

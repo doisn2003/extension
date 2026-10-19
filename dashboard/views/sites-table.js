@@ -3,7 +3,8 @@
 import * as sites from '../../lib/sites.js';
 import * as storage from '../../lib/storage.js';
 import { ACCOUNT_ERRORS } from '../../lib/account-reader.js';
-import { measureOffset, quality, consensus } from '../../lib/clock.js';
+import { measureOffset, quality, consensus, hasAnchor, serverNow } from '../../lib/clock.js';
+import { buildLeaguesUrl, buildAlternateLeaguesUrl } from '../../lib/hotmatch.js';
 import { request, loadDictionary } from '../../lib/net.js';
 import { vnToday, formatOffset } from '../../lib/vn-time.js';
 import { LABEL_INFO } from '../../lib/blackbox.js';
@@ -108,7 +109,7 @@ function renderConsensus(list) {
     }),
     ' ',
     el('span', {
-      text: `Sai số ±${cons.uncertaintyMs}ms, ${cons.agree}/${cons.total} site đồng thuận.` +
+      text: `Sai số ±${cons.uncertaintyMs}ms, ${cons.agree}/${cons.total} site đồng thuận (chỉ tham khảo; lịch bắn dùng đồng hồ riêng từng site).` +
         (cons.outliers.length ? ` Lệch nhóm: ${cons.outliers.join(', ')}.` : ''),
     }),
     big
@@ -159,9 +160,9 @@ function renderRow(site, stt, cons, passwords = {}) {
     const tone = isOutlier ? 'bad' : q === 'good' ? 'good' : q === 'fair' ? 'warn' : 'bad';
     return el('span', {
       class: `chip ${tone}`,
-      title: `Sai số tối đa ±${site.clock.uncertaintyMs}ms · ${site.clock.samples} mẫu · ${fmtAgo(site.clock.at)}` +
+      title: `Khoảng ước lượng HTTP Date ±${site.clock.uncertaintyMs}ms · ${site.clock.samples} mẫu · ${fmtAgo(site.clock.at)}` +
         (isOutlier ? '\nLệch khỏi đồng thuận của các site khác — sẽ dùng phép đo riêng của site này.' : ''),
-    }, `${formatOffset(site.clock.offsetMs)} ±${site.clock.uncertaintyMs}ms`);
+    }, `${formatOffset(hasAnchor(site.clock) ? serverNow(site.clock) - Date.now() : site.clock.offsetMs)} ±${site.clock.uncertaintyMs}ms`);
   })();
 
   const endpointCell = (() => {
@@ -516,7 +517,7 @@ async function syncOne(site, btn) {
     btn.disabled = true;
     btn.textContent = 'đang đo…';
   }
-  const clock = await measureOffset(sites.origin(site), { samples: config.clockSamples });
+  const clock = await measureOffset(sites.origin(site), { samples: config.clockSamples, url: site.account?.uid ? buildLeaguesUrl(site) : null, fallbackUrl: site.account?.uid ? buildAlternateLeaguesUrl(site) : null });
   await sites.setClock(site.brand, clock);
   await render();
   if (!clock.ok) toast(`${sites.displayName(site)}: không đo được giờ (${clock.error}).`, 'bad');
@@ -534,7 +535,7 @@ async function handleSyncAll() {
 
   try {
     await pooled(list, 4, async (site) => {
-      const clock = await measureOffset(sites.origin(site), { samples: config.clockSamples });
+      const clock = await measureOffset(sites.origin(site), { samples: config.clockSamples, url: site.account?.uid ? buildLeaguesUrl(site) : null, fallbackUrl: site.account?.uid ? buildAlternateLeaguesUrl(site) : null });
       await sites.setClock(site.brand, clock);
       done += 1;
       btn.textContent = `Đo ${done}/${list.length}…`;

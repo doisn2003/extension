@@ -1,5 +1,5 @@
 /**
- * Đối chiếu logic của tool với chính dữ liệu đã bắt được từ tip88.
+ * Đối chiếu logic với format đã bắt được từ tip88, dùng fixture giả lập không có phiên thật.
  *
  * Đây không phải unit test cho vui: nó ghim hành vi của tool vào request thật.
  * Nếu ai đó sửa cách dựng URL hay cách đọc cookie mà làm lệch đi, bộ này đỏ ngay.
@@ -29,8 +29,8 @@ import {
   scoreKey, duplicateScores, sentScores,
 } from '../lib/prediction.js';
 
-const CAPTURE = new URL('../../giftCode-Collected.json', import.meta.url);
-const REDEEM = new URL('../../giftCode-rewardRedeemed.json', import.meta.url);
+const CAPTURE = new URL('./fixtures/giftCode-Collected.synthetic.json', import.meta.url);
+const REDEEM = new URL('./fixtures/giftCode-rewardRedeemed.synthetic.json', import.meta.url);
 
 let pass = 0, fail = 0;
 function check(name, actual, expected) {
@@ -173,9 +173,9 @@ check('không có dữ liệu thì trả null', consensus([{ key: 'x', clock: nu
 
 console.log('\n11) Ưu tiên offset nào khi bắn');
 const tight = { brand: 'tip88', clock: { ok: true, offsetMs: 2240, uncertaintyMs: 119 } };
-check('đồng thuận hẹp hơn thì dùng đồng thuận', effectiveClock(tight, cons).source, 'consensus');
+check('không mượn đồng hồ nguồn khác dù khoảng hẹp hơn', effectiveClock(tight, cons).source, 'site');
 check('site lệch nhóm thì dùng phép đo riêng', effectiveClock({ brand: 'rogue', clock: { ok: true, offsetMs: -40000, uncertaintyMs: 50 } }, consRogue).source, 'site');
-check('site chưa đo thì mượn đồng thuận', effectiveClock({ brand: 'moi', clock: null }, cons).source, 'consensus');
+check('site chưa đo phải đo riêng', effectiveClock({ brand: 'moi', clock: null }, cons), 'null');
 
 console.log('\n12) Kiểm chính tả tên trận');
 const good = validateMatch({ home: 'Independiente Santa Fe', away: 'Boyaca Chico', date: '2026-08-09', time: '04:20' }, vnToEpoch('2026-08-09', '00:00'));
@@ -1010,15 +1010,10 @@ check('chọn tất cả thì vẫn vẽ lại',
 console.log('\n38) Chế độ AWM (Bắn từng viên / FIFO Queue) & SCAR (Bắn liên thanh)');
 check('mặc định cấu hình là chế độ awm', DEFAULT_CONFIG.shootMode, 'awm');
 check('vùng đệm an toàn mặc định là 200ms', DEFAULT_CONFIG.safetyBufferMs, 200);
-check('awmRescueDelayMs mặc định là 3800ms', DEFAULT_CONFIG.awmRescueDelayMs, 3800);
+check('AWM tối đa 3 phát tuần tự', DEFAULT_CONFIG.awmMaxAttempts, 3);
+check('AWM giãn cách retry 200ms', DEFAULT_CONFIG.awmRetryDelayMs, 200);
 
-// Công thức tính thời điểm trigger AWM: TriggerTime = Release - Offset - Math.round(RTT / 2) + SafetyBuffer
-const mockReleaseEpoch = 1700000000000;
-const mockOffsetMs = -120; // Server đi trước máy 120ms
-const mockRttMs = 80;      // Preflight round-trip time 80ms
-const mockBufferMs = 200;  // Vùng đệm 200ms
-const expectedTrigger = (mockReleaseEpoch - mockOffsetMs) - Math.round(mockRttMs / 2) + mockBufferMs;
-check('công thức tính giờ AWM bù đúng RTT/2 và vùng đệm', expectedTrigger, 1700000000120 - 40 + 200);
+// Công thức và Windows Sync được kiểm thử hành vi tại timing.test.js.
 
 console.log('\n39) Classify: Sửa bug phản hồi trận Ngoại Hạng Anh (RE_ALREADY có data.gift_code)');
 const realPremierLeagueSuccess = JSON.stringify({
